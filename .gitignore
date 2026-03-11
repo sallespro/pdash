@@ -1,0 +1,25 @@
+.gm-stop-verified
+.code-search/
+
+# Dependencies
+node_modules/
+
+# Environment variables (contains API keys — never commit)
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+
+# OS / editor
+.DS_Store
+*.local
+.vscode/
+.idea/
+
+# Vite cache
+.vite/
+
+# Playwright / test artifacts
+tmp/

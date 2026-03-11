@@ -1,0 +1,497 @@
+# PDash — Weather-Aware Activity Scheduling Assistant
+
+## 1. Vision
+
+PDash is a fullstack application that acts as a personal outdoor activity assistant. It listens to the user describe how they like to do activities, learns the preparation tasks involved, checks weather forecasts, and proposes optimal time slots to do those activities — factoring in weather conditions, commute time, and preparation steps.
+
+---
+
+## 2. Core Concepts
+
+### 2.1 Activity
+
+A named outdoor pursuit the user wants to do (e.g., "bike ride", "surfing", "kite flying"). Each activity has:
+
+| Field              | Description                                          |
+|--------------------|------------------------------------------------------|
+| name               | Human-readable label                                 |
+| weather_profile    | Acceptable weather conditions (see 2.2)              |
+| duration_estimate  | How long the activity itself takes                   |
+| destination        | Default location or "to be chosen"                   |
+| task_chain         | Ordered list of preparation & wrap-up tasks (see 2.3)|
+
+### 2.2 Weather Profile
+
+A set of constraints that define acceptable outdoor conditions for an activity.
+
+| Constraint       | Type                              | Example                                  |
+|------------------|-----------------------------------|------------------------------------------|
+| temperature_range| min/max C                         | 15-30 C                                  |
+| wind_speed_range | min/max km/h                      | 0-25 km/h (bike), 15-40 km/h (kite)     |
+| precipitation    | allowed / not allowed / light only| not allowed (bike)                       |
+| uv_index_max     | max UV index                      | 6                                        |
+| cloud_cover_pref | preferred range %                 | 30-80% (partially cloudy preferred)      |
+| daylight_required| boolean                           | true                                     |
+
+### 2.3 Task
+
+A discrete step required before, during, or after an activity. Tasks form an ordered chain.
+
+| Field             | Description                                         |
+|-------------------|-----------------------------------------------------|
+| name              | e.g., "Prepare picnic"                              |
+| type              | preparation / transit / activity / cleanup          |
+| duration_estimate | Time in minutes                                     |
+| lead_time         | How far before the activity start this must begin   |
+| depends_on        | Other tasks that must complete first                |
+| location          | Where this task happens (home, en route, destination)|
+| notes             | Free-text user preferences                          |
+
+Example — "Bike Ride with Picnic":
+
+  1. [preparation] Prepare picnic       — 30 min, at home, lead_time: 90 min
+  2. [preparation] Check tire pressure  — 10 min, at home, lead_time: 60 min
+  3. [transit]     Commute to trail     — calculated, from home to destination
+  4. [activity]    Bike ride            — 120 min, at destination
+  5. [transit]     Commute back home    — calculated, from destination to home
+  6. [cleanup]     Clean bike           — 15 min, at home
+
+### 2.4 Opportunity Window
+
+A time slot in the forecast where weather conditions satisfy an activity's weather profile for its full duration (including commute).
+
+### 2.5 Proposed Schedule
+
+A concrete plan combining an opportunity window with the full task chain, showing start/end times for every task. The system generates 3 proposed schedules spanning the next 3 days.
+
+---
+
+## 3. Actors
+
+### 3.1 User
+
+The person who interacts with PDash. Responsibilities:
+
+- Describes activities via voice or text, explaining preferences and how they like to do things.
+- Reviews & selects a proposed schedule from the 3 options.
+- Confirms or adjusts preparation tasks once a schedule is selected.
+- Sets home location and preferred destinations.
+
+### 3.2 Voice Listener (Speech-to-Text Agent)
+
+Captures and transcribes the user's spoken input.
+
+- Continuously listens when activated by the user.
+- Streams transcribed text to the Intent Parser.
+- Handles ambient noise filtering and partial utterance buffering.
+- Provides visual feedback: waveform animation and live transcription overlay.
+
+### 3.3 Intent Parser (NLU Agent)
+
+Interprets transcribed (or typed) text to extract structured intent.
+
+Three intent types:
+
+- Activity Definition Intent — User is describing a new activity or modifying an existing one.
+  Parser extracts: activity name, weather preferences, preparation steps, duration, destination hints.
+
+- Activity Request Intent — User wants to do an existing activity (e.g., "I want to ride my bike this week").
+  Parser extracts: activity reference, time horizon, any overrides.
+
+- General Query Intent — User asks about weather, schedule status, etc.
+
+Outputs a structured intent object passed to the appropriate handler.
+
+### 3.4 Activity Manager
+
+Owns the lifecycle of activity definitions.
+
+- Creates new activities from parsed intents, prompting the user to confirm or refine.
+- Stores activities with their weather profiles and task chains.
+- Updates activities when the user modifies preferences.
+- Resolves an activity reference from a request intent into a full activity record.
+
+### 3.5 Weather Service
+
+Provides forecast data and evaluates weather windows.
+
+- Fetches hourly forecasts for the next 3 days from a weather API (e.g., Open-Meteo, OpenWeatherMap).
+- Caches forecasts with a configurable TTL (default: 1 hour).
+- Evaluates a weather profile against the forecast to produce a list of opportunity windows
+  (contiguous time blocks where all constraints are met).
+- Scores each window by how closely conditions match the ideal (not just acceptable) range.
+
+### 3.6 Route & Commute Calculator
+
+Estimates travel time and distance.
+
+- Accepts origin (user's current/home location) and destination.
+- Returns estimated commute duration for the relevant transport mode (cycling, driving, walking).
+- Provides departure and arrival times that bookend the activity window.
+- Uses a routing API (e.g., OpenRouteService, Google Directions, Mapbox).
+
+### 3.7 Schedule Composer
+
+Assembles opportunity windows, task chains, and commute estimates into complete proposed schedules.
+
+- Inputs: activity record, opportunity windows (from Weather Service), commute estimates (from Route Calculator).
+- Builds a timeline for each opportunity window by anchoring the activity block inside the weather window,
+  then back-filling preparation tasks (respecting lead times and dependencies), and appending cleanup tasks.
+- Validates that every task fits within feasible hours (e.g., no prep task at 3 AM unless user allows it).
+- Ranks the 3 best schedules by a composite score: weather quality, time-of-day preference, minimal wasted time.
+- Outputs 3 proposed schedules to the UI.
+
+### 3.8 Task Scheduler
+
+Manages committed schedules after the user selects one.
+
+- Commits the selected proposed schedule, converting each task into a scheduled item with a fixed start time.
+- Sends reminders/notifications at configurable lead times before each task.
+- Tracks task completion status (pending -> in progress -> done -> skipped).
+- Re-evaluates weather closer to the scheduled time and alerts the user if conditions have changed significantly.
+
+### 3.9 Notification Agent
+
+Delivers timely alerts to the user.
+
+- Preparation reminders ("Start preparing your picnic in 15 minutes").
+- Departure alerts ("Leave now to arrive by 10:30 AM").
+- Weather change warnings ("Rain expected at 2 PM — your ride may be affected").
+- Schedule confirmation ("Your bike ride is set for tomorrow at 9 AM").
+
+---
+
+## 4. User Flows
+
+### 4.1 Flow A — Define a New Activity (Voice)
+
+User speaks:
+  "I like to ride my bike and have a picnic.
+   I need to prepare the picnic before I leave.
+   I prefer riding when it's not too sunny and not rainy.
+   Usually takes me about 2 hours."
+
+Flow:
+
+  Voice Listener
+       |
+       | transcription
+       v
+  Intent Parser
+       |
+       | activity_definition intent
+       v
+  Activity Manager
+       |
+       | draft activity
+       v
+  UI: Confirm Activity  <--  user reviews & edits  -->  saved activity
+
+Steps:
+
+1. Voice Listener transcribes speech.
+2. Intent Parser identifies an activity definition intent and extracts:
+   name="Bike Ride", tasks=["Prepare picnic"], weather=["no rain", "not too sunny"], duration=120 min.
+3. Activity Manager creates a draft activity with inferred weather profile and task chain.
+4. UI presents the draft for user confirmation. User can adjust thresholds, add/remove tasks, set destination.
+5. Activity is saved.
+
+### 4.2 Flow B — Request an Activity
+
+User says or types: "I want to ride my bike"
+
+Flow:
+
+  Intent Parser
+       |
+       | activity_request
+       v
+  Activity Manager
+       |
+       | resolved activity
+       |
+       +------------------+
+       |                  |
+       v                  v
+  Weather Service    Route & Commute Calculator
+       |                  |
+       | windows          | commute estimates
+       |                  |
+       +--------+---------+
+                |
+                v
+        Schedule Composer
+                |
+                v
+      UI: 3 Proposed Schedules
+                |
+                | user selects one
+                v
+        Task Scheduler  ---reminders--->  Notification Agent
+
+Steps:
+
+1. Intent Parser recognizes an activity request for "Bike Ride".
+2. Activity Manager resolves the full activity record (weather profile, task chain, destination).
+3. Weather Service fetches the 3-day forecast and finds opportunity windows matching the weather profile.
+4. Route & Commute Calculator estimates cycling commute time from user's location to destination (both ways).
+5. Schedule Composer builds a timeline for each window, back-fills preparation tasks, ranks, and selects the top 3.
+6. UI displays 3 proposed schedules, each showing:
+   - Date and day of week
+   - Weather summary (temp, wind, cloud, UV) for the window
+   - Full task timeline with start/end times
+   - Commute departure time and estimated arrival
+   - Estimated return time
+7. User selects a schedule.
+8. Task Scheduler commits the schedule, sets reminders for each task.
+9. Notification Agent begins delivering alerts.
+
+### 4.3 Flow C — Weather Change Alert
+
+1. Task Scheduler periodically re-checks weather for committed schedules.
+2. If conditions breach the activity's weather profile, Notification Agent warns the user.
+3. User can request re-scheduling (triggers Flow B again with a narrower time horizon).
+
+---
+
+## 5. Data Model
+
+### 5.1 Entities
+
+User
+  id: UUID
+  name: string
+  home_location: { lat, lng, address }
+  preferences: { wake_time, sleep_time, notification_channels }
+  activities: Activity[]
+
+Activity
+  id: UUID
+  user_id: UUID
+  name: string
+  description: string
+  weather_profile: WeatherProfile
+  duration_estimate: minutes
+  default_destination: Location | null
+  task_templates: TaskTemplate[]
+
+TaskTemplate
+  id: UUID
+  activity_id: UUID
+  name: string
+  type: enum(preparation, transit, activity, cleanup)
+  duration_estimate: minutes
+  lead_time: minutes
+  depends_on: TaskTemplate.id[]
+  location_type: enum(home, en_route, destination)
+  notes: string
+
+WeatherProfile
+  temperature_min: C
+  temperature_max: C
+  wind_speed_min: km/h
+  wind_speed_max: km/h
+  precipitation_allowed: enum(none, light, any)
+  uv_index_max: number
+  cloud_cover_min: %
+  cloud_cover_max: %
+  daylight_required: boolean
+
+ScheduledPlan
+  id: UUID
+  user_id: UUID
+  activity_id: UUID
+  status: enum(proposed, confirmed, in_progress, completed, cancelled)
+  weather_snapshot: WeatherData
+  destination: Location
+  scheduled_tasks: ScheduledTask[]
+
+ScheduledTask
+  id: UUID
+  plan_id: UUID
+  template_id: TaskTemplate.id
+  name: string
+  type: enum(preparation, transit, activity, cleanup)
+  start_time: datetime
+  end_time: datetime
+  status: enum(pending, reminded, in_progress, done, skipped)
+  location: Location
+
+Location
+  lat: number
+  lng: number
+  address: string
+  name: string
+
+### 5.2 Entity Relationships
+
+  User 1──* Activity
+  Activity 1──* TaskTemplate
+  TaskTemplate *──* TaskTemplate  (depends_on)
+  User 1──* ScheduledPlan
+  Activity 1──* ScheduledPlan
+  ScheduledPlan 1──* ScheduledTask
+  TaskTemplate 1──* ScheduledTask  (instantiation)
+
+---
+
+## 6. UI Specification
+
+### 6.1 Screens
+
+Home / Dashboard
+  - Current weather summary at user's location.
+  - Upcoming committed schedules (next 48 hours) as timeline cards.
+  - Quick action button: microphone icon to speak a request.
+  - Quick action button: text input for typed requests.
+
+Activity Library
+  - List of all defined activities with icons, weather profiles, and task counts.
+  - Tap an activity to view/edit its details, weather profile, and task chain.
+  - "New Activity" button (opens voice or form flow).
+
+Activity Detail / Editor
+  - Activity name, description, destination picker (map).
+  - Weather profile sliders (temperature, wind, UV, precipitation toggle, cloud cover).
+  - Task chain editor: drag-to-reorder list with duration and lead-time inputs.
+  - "Test against forecast" button to preview opportunity windows without committing.
+
+Schedule Proposals (appears after activity request)
+  - 3 cards, one per proposed schedule, showing:
+    - Header: Day, date, weather icon + summary.
+    - Weather detail row: temperature, wind speed, UV index, precipitation chance.
+    - Timeline: vertical timeline of all tasks with start -> end times.
+    - Commute row: departure time, estimated travel duration, arrival time (both ways).
+    - Score badge: composite quality score (weather + convenience).
+  - User taps "Select" on one card.
+
+Active Schedule View
+  - Full timeline of the committed schedule.
+  - Each task shows status (pending / in progress / done / skipped).
+  - Live weather bar updating conditions vs. the original snapshot.
+  - "Reschedule" button if weather has changed.
+
+Settings
+  - Home location (map picker).
+  - Wake / sleep hours (defines feasible scheduling window).
+  - Notification preferences (push, sound, advance reminder times).
+  - Connected services (weather API key, routing API key).
+
+### 6.2 Voice Interaction Overlay
+
+  - Floating microphone button on all screens.
+  - When active, shows a waveform animation and live transcription.
+  - Transcription feeds into the Intent Parser in real time.
+  - Confirmation dialog before saving any extracted activity or triggering a request.
+
+---
+
+## 7. API & Integration Points
+
+| Integration        | Purpose                    | Candidate Providers                                    |
+|--------------------|----------------------------|--------------------------------------------------------|
+| Weather Forecast   | Hourly 3-day forecast      | Open-Meteo (free), OpenWeatherMap, WeatherAPI          |
+| Routing / Commute  | Travel time estimation     | OpenRouteService (free), Mapbox Directions, Google     |
+| Speech-to-Text     | Voice transcription        | Web Speech API (browser-native), Deepgram, Whisper     |
+| Geocoding          | Address <-> coordinates    | Nominatim (free), Mapbox Geocoding                     |
+| Push Notifications | Reminders & alerts         | Web Push API, Firebase Cloud Messaging                 |
+
+---
+
+## 8. Architecture Overview
+
+  +-------------------------------------------------------------+
+  |                        CLIENT (SPA)                          |
+  |                                                              |
+  |  +--------+ +------------+ +------------+ +---------------+ |
+  |  | Voice  | | Dashboard  | | Activity   | | Schedule      | |
+  |  | Overlay| | Screen     | | Editor     | | Proposals     | |
+  |  +---+----+ +-----+------+ +-----+------+ +-------+-------+ |
+  |      +------------+-------------+-----------------+          |
+  |                          |                                   |
+  |                    REST / WebSocket                          |
+  +-------------------------------------------------------------+
+                             |
+  +-------------------------------------------------------------+
+  |                       SERVER (API)                           |
+  |                                                              |
+  |  +--------------+  +--------------+  +--------------------+  |
+  |  | Intent       |  | Activity     |  | Schedule           |  |
+  |  | Parser       |  | Manager      |  | Composer           |  |
+  |  +------+-------+  +------+-------+  +---------+----------+  |
+  |         |                 |                     |             |
+  |  +------+-------+  +------+-------+  +---------+----------+  |
+  |  | NLU / LLM    |  | Database     |  | Task Scheduler     |  |
+  |  | Service      |  |              |  | + Notification Svc  |  |
+  |  +--------------+  +--------------+  +---------+----------+  |
+  |                                                |             |
+  |         +--------------+  +--------------------+             |
+  |         | Weather      |  | Route & Commute                  |
+  |         | Service      |  | Calculator                       |
+  |         +------+-------+  +------+-----------+               |
+  +-------------------------------------------------------------+
+                   |                 |
+            +------+----+     +-----+------+
+            | Weather   |     | Routing    |
+            | API       |     | API        |
+            +-----------+     +------------+
+
+---
+
+## 9. Schedule Composition Algorithm
+
+INPUT:
+  activity: Activity
+  windows: OpportunityWindow[]     (from Weather Service)
+  commute: { to_dest: min, from_dest: min }
+  user_prefs: { wake_time, sleep_time }
+
+FOR EACH window IN windows:
+  1. Place the activity block (activity.duration_estimate) centered in the window.
+  2. Prepend transit task (commute.to_dest) immediately before activity start.
+  3. Append transit task (commute.from_dest) immediately after activity end.
+  4. Back-fill preparation tasks by lead_time, respecting depends_on order.
+     - earliest_task_start = max(wake_time, task_start_by_lead_time)
+  5. Append cleanup tasks after return transit.
+     - latest_task_end must be <= sleep_time
+  6. VALIDATE: all tasks fit within wake_time..sleep_time
+     AND activity block fits entirely within the weather opportunity window.
+  7. SCORE:
+     - weather_score: how close conditions are to ideal midpoints (not just acceptable)
+     - time_score: prefer mid-morning and late-afternoon over midday heat
+     - convenience_score: fewer gaps between tasks = better
+     - composite = w1 * weather + w2 * time + w3 * convenience
+
+OUTPUT:
+  Top 3 schedules by composite score, each containing:
+    - list of ScheduledTask with concrete start/end times
+    - weather summary for the window
+    - composite score breakdown
+
+---
+
+## 10. Non-Functional Requirements
+
+| Requirement                  | Target                                                    |
+|------------------------------|-----------------------------------------------------------|
+| Forecast refresh             | Every 60 minutes or on-demand                             |
+| Schedule generation latency  | < 3 seconds from request to proposals displayed           |
+| Voice transcription latency  | < 500 ms partial results                                  |
+| Offline support              | Cache last forecast; show cached schedules                |
+| Data privacy                 | Location and voice data stored locally by default         |
+| Accessibility                | WCAG 2.1 AA; voice-first interaction as primary mode      |
+| Mobile-first                 | Responsive design; PWA installable                        |
+
+---
+
+## 11. Glossary
+
+| Term               | Definition                                                                  |
+|--------------------|-----------------------------------------------------------------------------|
+| Activity           | A named outdoor pursuit with weather constraints and preparation tasks      |
+| Task Chain         | Ordered sequence of tasks (prep -> transit -> activity -> transit -> cleanup)|
+| Weather Profile    | Set of acceptable weather conditions for an activity                        |
+| Opportunity Window | A contiguous forecast block where weather satisfies an activity's profile   |
+| Proposed Schedule  | A fully timed plan combining an opportunity window with the complete chain  |
+| Committed Schedule | A proposed schedule the user has selected and confirmed                     |
+| Lead Time          | How far in advance of the activity a preparation task must begin            |
