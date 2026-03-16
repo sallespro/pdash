@@ -286,6 +286,29 @@ app.get('/api/weather/forecast', async (req, res) => {
   }
 });
 
+// ─── GET /api/activity-posts — Serve generated activity ticker posts ─────
+/**
+ * Returns pre-generated activity posts from public/activity-posts.json.
+ * Run `node scripts/generate-activity-posts.js` to refresh the data.
+ */
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.get('/api/activity-posts', (req, res) => {
+  try {
+    const postsPath = path.join(__dirname, 'public', 'activity-posts.json');
+    const data = readFileSync(postsPath, 'utf-8');
+    res.json(JSON.parse(data));
+  } catch (err) {
+    console.error('[activity-posts] Error:', err.message);
+    res.json([]);
+  }
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🌤  PDash API server → http://localhost:${PORT}`);
@@ -295,6 +318,7 @@ app.listen(PORT, () => {
   console.log(`   POST /api/window-verdict   — AI weather verdict`);
   console.log(`   GET  /api/weather/current  — current weather (OpenWeatherMap)`);
   console.log(`   GET  /api/weather/forecast — 5-day/3h forecast (OpenWeatherMap)`);
+  console.log(`   GET  /api/activity-posts   — activity ticker posts`);
   console.log(`   OpenAI key:       ${process.env.OPENAI_API_KEY ? '✓ loaded' : '✗ MISSING'}`);
   console.log(`   OpenWeather key:  ${process.env.OPENWEATHER_API_KEY ? '✓ loaded' : '✗ MISSING'}`);
 });

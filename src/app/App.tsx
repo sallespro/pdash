@@ -272,7 +272,7 @@ export default function App() {
     <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
       {/* Header */}
       <div className="px-6 pt-5 pb-3">
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-2xl mx-auto">
           <h1 className="text-2xl font-light">{greeting}!</h1>
           <p className="text-xs text-gray-500">
             {currentDate.toLocaleDateString('en-US', {
@@ -284,14 +284,14 @@ export default function App() {
 
       {/* Main content */}
       <div className="flex-1 overflow-y-auto px-6 pb-24">
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-2xl mx-auto">
           {renderScreen()}
         </div>
       </div>
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-xl border-t">
-        <div className="max-w-lg mx-auto flex items-center justify-around py-2">
+        <div className="max-w-2xl mx-auto flex items-center justify-around py-2">
           <NavButton
             icon={<Home className="size-5" />}
             label="Home"

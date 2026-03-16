@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sun, Cloud, CloudRain, Wind, Droplets, Thermometer, MapPin, RefreshCw, Navigation } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
+import { ActivityPostsTicker } from './ActivityPostsTicker';
 import type { HourlyWeather, Location, ScheduledPlan, Activity } from '../types';
 import { fetchForecast, weatherCodeToLabel } from '../services/weather';
 
@@ -66,59 +67,65 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
 
   return (
     <div className="space-y-5">
-      {/* Current Weather */}
-      <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg text-white/90">Current Weather</CardTitle>
-              {location && (
-                <p className="text-white/70 text-xs mt-1 flex items-center gap-1">
-                  <MapPin className="size-3" />
-                  {location.name || location.address.split(',')[0]}
-                </p>
-              )}
-            </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="text-white/70 hover:text-white hover:bg-white/10"
-              onClick={loadForecast}
-              disabled={loading}
-            >
-              <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {currentHour ? (
+      {/* Top Row: Weather + Activity Posts Ticker side by side */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Current Weather */}
+        <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0">
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {weatherIcon(currentHour.weather_code, 'size-12')}
-                <div>
-                  <p className="text-4xl font-light">{Math.round(currentHour.temperature)}°</p>
-                  <p className="text-white/80 text-sm">{weatherCodeToLabel(currentHour.weather_code)}</p>
+              <div>
+                <CardTitle className="text-sm text-white/90">Weather</CardTitle>
+                {location && (
+                  <p className="text-white/70 text-[10px] mt-0.5 flex items-center gap-1">
+                    <MapPin className="size-2.5" />
+                    {location.name || location.address.split(',')[0]}
+                  </p>
+                )}
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-white/70 hover:text-white hover:bg-white/10 size-7"
+                onClick={loadForecast}
+                disabled={loading}
+              >
+                <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {currentHour ? (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  {weatherIcon(currentHour.weather_code, 'size-8')}
+                  <div>
+                    <p className="text-3xl font-light leading-none">{Math.round(currentHour.temperature)}°</p>
+                    <p className="text-white/80 text-[10px] mt-0.5">{weatherCodeToLabel(currentHour.weather_code)}</p>
+                  </div>
+                </div>
+                <div className="space-y-0.5 text-[10px] text-white/70">
+                  <p className="flex items-center gap-1">
+                    <Wind className="size-3" /> {Math.round(currentHour.wind_speed)} km/h
+                  </p>
+                  <p className="flex items-center gap-1">
+                    <Droplets className="size-3" /> {currentHour.precipitation} mm
+                  </p>
+                  <p className="flex items-center gap-1">
+                    <Thermometer className="size-3" /> UV {currentHour.uv_index.toFixed(1)}
+                  </p>
                 </div>
               </div>
-              <div className="text-right space-y-1 text-sm text-white/80">
-                <p className="flex items-center gap-1.5 justify-end">
-                  <Wind className="size-3.5" /> {Math.round(currentHour.wind_speed)} km/h
-                </p>
-                <p className="flex items-center gap-1.5 justify-end">
-                  <Droplets className="size-3.5" /> {currentHour.precipitation} mm
-                </p>
-                <p className="flex items-center gap-1.5 justify-end">
-                  <Thermometer className="size-3.5" /> UV {currentHour.uv_index.toFixed(1)}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-white/60 text-sm">
-              {location ? 'Loading forecast...' : 'Set your location in Settings to see weather'}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <p className="text-white/60 text-xs">
+                {location ? 'Loading...' : 'Set location in Settings'}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Activity Posts Ticker */}
+        <ActivityPostsTicker />
+      </div>
 
       {/* Hourly forecast */}
       {next12.length > 0 && (
