@@ -39,8 +39,30 @@ function getArg(flag, fallback) {
 }
 
 const ACTIVITY = getArg('--activity', 'Bike Ride');
-const LAT = parseFloat(getArg('--lat', '37.7749'));   // default: San Francisco
-const LON = parseFloat(getArg('--lon', '-122.4194'));
+
+async function detectLocation() {
+  const latArg = getArg('--lat', null);
+  const lonArg = getArg('--lon', null);
+  if (latArg && lonArg) return { lat: parseFloat(latArg), lon: parseFloat(lonArg), source: 'args' };
+
+  // Auto-detect via IP geolocation (free, no key needed)
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    if (res.ok) {
+      const j = await res.json();
+      if (j.latitude && j.longitude) {
+        console.log(`Auto-detected location: ${j.city}, ${j.country_name} (${j.latitude}, ${j.longitude})`);
+        return { lat: j.latitude, lon: j.longitude, source: 'ip' };
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Final fallback
+  console.warn('Could not detect location, using San Francisco. Pass --lat / --lon to override.');
+  return { lat: 37.7749, lon: -122.4194, source: 'fallback' };
+}
+
+const { lat: LAT, lon: LON } = await detectLocation();
 
 // Bike ride weather profile
 const PROFILES = {

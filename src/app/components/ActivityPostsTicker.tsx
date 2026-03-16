@@ -36,20 +36,29 @@ function scoreBg(score: number): string {
   return 'bg-orange-500/20';
 }
 
-export function ActivityPostsTicker() {
+interface ActivityPostsTickerProps {
+  location: { lat: number; lng: number; name?: string; address?: string } | null;
+}
+
+export function ActivityPostsTicker({ location }: ActivityPostsTickerProps) {
   const [posts, setPosts] = useState<ActivityPost[]>([]);
+  const [generating, setGenerating] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    fetch('/api/activity-posts')
+    if (!location) return;
+    setGenerating(true);
+    setActiveIndex(0);
+    fetch(`/api/activity-posts?lat=${location.lat}&lon=${location.lng}`)
       .then(r => r.ok ? r.json() : [])
       .then(data => {
         if (Array.isArray(data) && data.length > 0) setPosts(data);
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+      .finally(() => setGenerating(false));
+  }, [location?.lat, location?.lng]);
 
   // Auto-rotate every 6 seconds
   useEffect(() => {
@@ -73,10 +82,19 @@ export function ActivityPostsTicker() {
 
   if (posts.length === 0) {
     return (
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 flex items-center justify-center min-h-[180px]">
-        <p className="text-slate-500 text-xs" style={{ fontFamily: "'ABC Favorit Mono', monospace" }}>
-          Loading ride posts...
-        </p>
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 flex flex-col items-center justify-center min-h-[180px] gap-2">
+        {generating ? (
+          <>
+            <div className="size-4 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+            <p className="text-slate-500 text-xs" style={{ fontFamily: "'ABC Favorit Mono', monospace" }}>
+              Analysing ride windows...
+            </p>
+          </>
+        ) : (
+          <p className="text-slate-500 text-xs" style={{ fontFamily: "'ABC Favorit Mono', monospace" }}>
+            {location ? 'No posts yet' : 'Set location in Settings'}
+          </p>
+        )}
       </div>
     );
   }

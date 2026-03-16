@@ -286,26 +286,241 @@ app.get('/api/weather/forecast', async (req, res) => {
   }
 });
 
-// ─── GET /api/activity-posts — Serve generated activity ticker posts ─────
+// ─── GET /api/activity-posts — Dynamic activity ticker posts by location ─
 /**
- * Returns pre-generated activity posts from public/activity-posts.json.
- * Run `node scripts/generate-activity-posts.js` to refresh the data.
+ * Generates (and caches for 3h) best-window posts for Bike Ride activity.
+ * Query params: lat, lon  (required for location-relative posts)
  */
-import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.get('/api/activity-posts', (req, res) => {
+// In-memory post cache: key = "lat,lon" → { data, fetched }
+const postCache = new Map();
+const POST_CACHE_TTL = 3 * 60 * 60 * 1000; // 3 hours
+
+const BIKE_PROFILE = {
+  temperature_min: 14, temperature_max: 32,
+  wind_speed_max: 25, precipitation_allowed: 'none',
+  uv_index_max: 8, daylight_required: true,
+};
+
+function _owmToCode(id) {
+  if (id === 800) return 0;
+  if (id >= 801 && id <= 804) return id - 799;
+  if (id >= 200 && id <= 232) return 95;
+  if (id >= 300 && id <= 321) return 51;
+  if (id >= 500 && id <= 531) return 61;
+  if (id >= 600 && id <= 622) return 71;
+  if (id >= 700 && id <= 781) return 45;
+  return 0;
+}
+
+function _codeLabel(code) {
+  if (code === 0) return 'Clear sky';
+  if (code <= 3) return 'Partly cloudy';
+  if (code <= 49) return 'Foggy';
+  if (code <= 59) return 'Drizzle';
+  if (code <= 69) return 'Rain';
+  if (code <= 79) return 'Snow';
+  if (code <= 82) return 'Rain showers';
+  if (code >= 95) return 'Thunderstorm';
+  return 'Unknown';
+}
+
+function _estUv(clouds, isDay) {
+  if (!isDay) return 0;
+  if (clouds >= 80) return 1;
+  if (clouds >= 50) return 3;
+  if (clouds >= 20) return 5;
+  return 7;
+}
+
+function _matchesProfile(h, p) {
+  if (h.temperature < p.temperature_min || h.temperature > p.temperature_max) return false;
+  if (h.wind_speed > p.wind_speed_max) return false;
+  if (p.precipitation_allowed === 'none' && (h.pop > 0.25 || h.precipitation > 0.1)) return false;
+  if (h.uv_index > p.uv_index_max) return false;
+  if (p.daylight_required && !h.is_day) return false;
+  return true;
+}
+
+function _buildWindow(hours) {
+  const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const mid = hours[Math.floor(hours.length / 2)];
+  return {
+    start: hours[0].time,
+    end: new Date(hours[hours.length - 1].time.getTime() + 3600000),
+    hours,
+    avg_temperature: avg(hours.map(h => h.temperature)),
+    avg_wind_speed: avg(hours.map(h => h.wind_speed)),
+    max_precipitation: Math.max(...hours.map(h => h.precipitation)),
+    avg_uv_index: avg(hours.map(h => h.uv_index)),
+    avg_cloud_cover: avg(hours.map(h => h.cloud_cover)),
+    avg_pop: avg(hours.map(h => h.pop)),
+    weather_code: mid.weather_code,
+    description: mid.description,
+  };
+}
+
+function _findWindows(hours, minHours = 2) {
+  const windows = [];
+  let run = [];
+  for (let i = 0; i < hours.length; i++) {
+    const h = hours[i];
+    const prev = i > 0 ? hours[i - 1] : null;
+    if (prev && h.time.getDate() !== prev.time.getDate() && run.length > 0) {
+      if (run.length >= minHours) windows.push(_buildWindow(run));
+      run = [];
+    }
+    if (_matchesProfile(h, BIKE_PROFILE)) { run.push(h); }
+    else { if (run.length >= minHours) windows.push(_buildWindow(run)); run = []; }
+  }
+  if (run.length >= minHours) windows.push(_buildWindow(run));
+  return windows;
+}
+
+function _scoreWindow(w) {
+  const p = BIKE_PROFILE;
+  const tempRange = p.temperature_max - p.temperature_min;
+  const tempNorm = tempRange > 0 ? (w.avg_temperature - p.temperature_min) / tempRange : 0.5;
+  const tempScore = Math.max(0, 1 - Math.abs(tempNorm - 0.55) / 0.45);
+  const windScore = Math.max(0, 1 - Math.pow(w.avg_wind_speed / p.wind_speed_max, 2));
+  const uvScore = Math.max(0, 1 - w.avg_uv_index / p.uv_index_max);
+  const precipScore = Math.max(0, 1 - w.avg_pop) * (w.max_precipitation < 0.5 ? 1 : 0.6);
+  const weatherScore = (tempScore + windScore + uvScore + precipScore) / 4;
+  const startHour = w.start.getHours();
+  const minDist = Math.min(...[9, 10, 15, 16].map(h => Math.abs(startHour - h)));
+  const timeScore = Math.max(0, 1 - minDist / 6);
+  const durationHours = (w.end - w.start) / 3600000;
+  const convenienceScore = Math.min(1, durationHours / 6);
+  return {
+    composite: 0.5 * weatherScore + 0.3 * timeScore + 0.2 * convenienceScore,
+    weather: weatherScore, time: timeScore,
+  };
+}
+
+async function _generatePostBody(w, score, city) {
+  const start = w.start;
+  const dayName = start.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const timeStr = start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const endStr = w.end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const durationH = ((w.end - w.start) / 3600000).toFixed(1);
+
+  const prompt = `You are a concise outdoor activity weather analyst for a dashboard ticker widget.
+Write a short weather analysis (2-3 sentences, max 120 words) for a Bike Ride opportunity.
+Location: ${city}
+Date: ${dayName}
+Window: ${timeStr} – ${endStr} (${durationH}h)
+Temperature: ${w.avg_temperature.toFixed(1)}°C  Wind: ${w.avg_wind_speed.toFixed(1)} km/h
+Conditions: ${w.description || _codeLabel(w.weather_code)}  Cloud: ${Math.round(w.avg_cloud_cover)}%
+UV: ${w.avg_uv_index.toFixed(1)}  Rain prob: ${Math.round(w.avg_pop * 100)}%
+Overall score: ${Math.round(score.composite * 100)}/100
+Be specific. Start with a verdict word (Excellent/Good/Decent/Fair). Keep it punchy.`;
+
+  const res = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.4,
+    max_tokens: 200,
+  });
+  return res.choices[0].message.content.trim();
+}
+
+async function generateActivityPosts(lat, lon) {
+  const key = `${parseFloat(lat).toFixed(2)},${parseFloat(lon).toFixed(2)}`;
+  const cached = postCache.get(key);
+  if (cached && Date.now() - cached.fetched < POST_CACHE_TTL) return cached.data;
+
+  const owmKey = process.env.OPENWEATHER_API_KEY;
+  const owmUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${owmKey}&units=metric`;
+  const owmRes = await fetch(owmUrl);
+  if (!owmRes.ok) throw new Error(`OWM error: ${owmRes.status}`);
+  const owmJson = await owmRes.json();
+  const city = owmJson.city?.name || 'your location';
+
+  // Expand 3h slots → hourly entries
+  const hours = [];
+  for (const slot of owmJson.list) {
+    const slotTime = new Date(slot.dt * 1000);
+    const wind_speed = slot.wind.speed * 3.6;
+    const precipitation = (slot.rain?.['3h'] ?? slot.snow?.['3h'] ?? 0) / 3;
+    const cloud_cover = slot.clouds.all;
+    const is_day = slot.sys?.pod === 'd';
+    for (let off = 0; off < 3; off++) {
+      hours.push({
+        time: new Date(slotTime.getTime() + off * 3600000),
+        temperature: slot.main.temp,
+        wind_speed,
+        precipitation,
+        pop: slot.pop ?? 0,
+        uv_index: _estUv(cloud_cover, is_day),
+        cloud_cover,
+        weather_code: _owmToCode(slot.weather[0]?.id ?? 800),
+        description: slot.weather[0]?.description ?? '',
+        is_day,
+      });
+    }
+  }
+
+  const windows = _findWindows(hours, 2);
+  if (windows.length === 0) {
+    const empty = [{ id: 'no-windows', title: 'No ideal windows found',
+      body: `Weather conditions over the next 5 days in ${city} don't match ideal Bike Ride requirements. Check back later!`,
+      activity: 'Bike Ride', score: 0, temperature: 0, wind: 0,
+      condition: 'N/A', conditionCode: 0, startTime: new Date().toISOString(),
+      endTime: new Date().toISOString(), city, timestamp: new Date().toISOString() }];
+    postCache.set(key, { data: empty, fetched: Date.now() });
+    return empty;
+  }
+
+  const scored = windows.map(w => ({ w, s: _scoreWindow(w) }))
+    .sort((a, b) => b.s.composite - a.s.composite)
+    .slice(0, 5);
+
+  const posts = [];
+  for (let i = 0; i < scored.length; i++) {
+    const { w, s } = scored[i];
+    const start = w.start;
+    const dayLabel = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const timeLabel = start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const endLabel = w.end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    let body;
+    try { body = await _generatePostBody(w, s, city); }
+    catch { body = `${Math.round(w.avg_temperature)}°C, wind ${Math.round(w.avg_wind_speed)} km/h, ${_codeLabel(w.weather_code)}. Score: ${Math.round(s.composite * 100)}/100.`; }
+    posts.push({
+      id: `bike-ride-${i}`,
+      title: `${dayLabel} · ${timeLabel} – ${endLabel}`,
+      body,
+      activity: 'Bike Ride',
+      score: Math.round(s.composite * 100),
+      temperature: Math.round(w.avg_temperature),
+      wind: Math.round(w.avg_wind_speed),
+      condition: _codeLabel(w.weather_code),
+      conditionCode: w.weather_code,
+      startTime: w.start.toISOString(),
+      endTime: w.end.toISOString(),
+      city,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  postCache.set(key, { data: posts, fetched: Date.now() });
+  return posts;
+}
+
+app.get('/api/activity-posts', async (req, res) => {
+  const { lat, lon } = req.query;
+  if (!lat || !lon) return res.json([]);
+  if (!process.env.OPENWEATHER_API_KEY) return res.status(500).json({ error: 'OPENWEATHER_API_KEY not configured' });
   try {
-    const postsPath = path.join(__dirname, 'public', 'activity-posts.json');
-    const data = readFileSync(postsPath, 'utf-8');
-    res.json(JSON.parse(data));
+    const posts = await generateActivityPosts(lat, lon);
+    res.json(posts);
   } catch (err) {
     console.error('[activity-posts] Error:', err.message);
-    res.json([]);
+    res.status(500).json({ error: err.message });
   }
 });
 
