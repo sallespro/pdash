@@ -108,7 +108,7 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
                     <Wind className="size-3" /> {Math.round(currentHour.wind_speed)} km/h
                   </p>
                   <p className="flex items-center gap-1">
-                    <Droplets className="size-3" /> {currentHour.precipitation} mm
+                    <Droplets className="size-3" /> {currentHour.precipitation < 0.05 ? '0.0' : currentHour.precipitation.toFixed(1)} mm
                   </p>
                   <p className="flex items-center gap-1">
                     <Thermometer className="size-3" /> UV {currentHour.uv_index.toFixed(1)}
@@ -124,7 +124,7 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
         </Card>
 
         {/* Activity Posts Ticker */}
-        <ActivityPostsTicker />
+        <ActivityPostsTicker location={location} />
       </div>
 
       {/* Hourly forecast */}
@@ -142,8 +142,8 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
                   </span>
                   {weatherIcon(h.weather_code, 'size-4')}
                   <span className="text-sm font-medium">{Math.round(h.temperature)}°</span>
-                  {h.precipitation > 0 && (
-                    <span className="text-[10px] text-blue-500">{h.precipitation}mm</span>
+                  {h.precipitation >= 0.1 && (
+                    <span className="text-[10px] text-blue-500">{h.precipitation.toFixed(1)}mm</span>
                   )}
                   <div className="flex items-center gap-0.5 text-[10px] text-gray-400">
                     <Navigation

@@ -2,7 +2,7 @@
   {
     "id": "bike-ride-0",
     "title": "Mon, Mar 16 · 12:00 PM – 12:00 AM",
-    "body": "Good. San Francisco offers a mild 19°C with light 8.6 km/h winds, making for comfortable cycling without much wind resistance. Scattered clouds and 66% cloud cover provide filtered sun, keeping UV exposure moderate. Visibility is clear with zero rain chance, perfect for a relaxed ride this Monday afternoon and evening.",
+    "body": "Good. Expect mild 19°C temps with a gentle 9 km/h breeze, making for comfortable cycling without strong wind resistance. Scattered clouds and 67% cover provide filtered sunlight and moderate UV exposure, while zero rain risk ensures clear visibility throughout your ride.",
     "activity": "Bike Ride",
     "score": 77,
     "temperature": 19,
@@ -12,57 +12,27 @@
     "startTime": "2026-03-16T15:00:00.000Z",
     "endTime": "2026-03-17T03:00:00.000Z",
     "city": "San Francisco",
-    "timestamp": "2026-03-15T23:47:48.547Z"
+    "timestamp": "2026-03-16T00:40:51.950Z"
   },
   {
     "id": "bike-ride-1",
-    "title": "Fri, Mar 20 · 12:00 PM – 09:00 PM",
-    "body": "Good. Expect mild 18.6°C temperatures with light 8.6 km/h winds, offering comfortable cycling without strong gusts. Broken clouds cover 52% of the sky, providing pleasant shade and excellent visibility. No rain and moderate UV make for a safe, enjoyable ride in San Francisco this Friday afternoon to evening.",
+    "title": "Fri, Mar 20 · 12:00 PM – 12:00 AM",
+    "body": "Good. Expect mild 18.7°C temperatures with a gentle 10 km/h breeze, offering comfortable cycling without strong wind resistance. Broken clouds cover 61% of the sky, providing filtered sunlight and a UV index of 3, so moderate sun protection is advised. Visibility is clear with zero rain chance, making for a pleasant afternoon and evening ride in San Francisco.",
     "activity": "Bike Ride",
     "score": 75,
     "temperature": 19,
-    "wind": 9,
+    "wind": 10,
     "condition": "Foggy",
     "conditionCode": 4,
     "startTime": "2026-03-20T15:00:00.000Z",
-    "endTime": "2026-03-21T00:00:00.000Z",
+    "endTime": "2026-03-21T03:00:00.000Z",
     "city": "San Francisco",
-    "timestamp": "2026-03-15T23:47:50.578Z"
+    "timestamp": "2026-03-16T00:40:53.360Z"
   },
   {
     "id": "bike-ride-2",
-    "title": "Wed, Mar 18 · 12:00 PM – 12:00 AM",
-    "body": "Good. San Francisco offers a pleasant 20.5°C with clear skies and minimal 15% cloud cover, ensuring excellent visibility for your ride. Moderate 11.6 km/h winds provide a refreshing breeze without hindering cycling. With zero rain chance and a UV index of 6, midday to evening is ideal—just remember sun protection.",
-    "activity": "Bike Ride",
-    "score": 73,
-    "temperature": 20,
-    "wind": 12,
-    "condition": "Clear sky",
-    "conditionCode": 0,
-    "startTime": "2026-03-18T15:00:00.000Z",
-    "endTime": "2026-03-19T03:00:00.000Z",
-    "city": "San Francisco",
-    "timestamp": "2026-03-15T23:47:53.046Z"
-  },
-  {
-    "id": "bike-ride-3",
-    "title": "Thu, Mar 19 · 12:00 PM – 12:00 AM",
-    "body": "Good. San Francisco offers a pleasant 20°C under clear skies with zero cloud cover, ensuring excellent visibility for your ride. Light 11 km/h winds provide a mild breeze without hindering cycling comfort. UV index is high at 7, so sun protection is advised for this rain-free afternoon and evening.",
-    "activity": "Bike Ride",
-    "score": 71,
-    "temperature": 20,
-    "wind": 11,
-    "condition": "Clear sky",
-    "conditionCode": 0,
-    "startTime": "2026-03-19T15:00:00.000Z",
-    "endTime": "2026-03-20T03:00:00.000Z",
-    "city": "San Francisco",
-    "timestamp": "2026-03-15T23:47:55.698Z"
-  },
-  {
-    "id": "bike-ride-4",
     "title": "Tue, Mar 17 · 12:00 PM – 12:00 AM",
-    "body": "Good. San Francisco offers a pleasant 20°C with clear skies and minimal cloud cover, ensuring excellent visibility for your ride. Light 10.5 km/h winds provide a gentle breeze without hindering cycling comfort. UV index is high, so sunscreen is recommended for this midday to midnight window.",
+    "body": "Good. San Francisco offers a pleasant 20°C with clear skies and minimal 6% cloud cover, ensuring excellent visibility for your ride. Light 10.7 km/h winds provide a gentle breeze without hindering cycling comfort. With zero rain chance and a moderate UV index of 7, midday to evening is ideal—just remember sun protection.",
     "activity": "Bike Ride",
     "score": 71,
     "temperature": 20,
@@ -72,6 +42,36 @@
     "startTime": "2026-03-17T15:00:00.000Z",
     "endTime": "2026-03-18T03:00:00.000Z",
     "city": "San Francisco",
-    "timestamp": "2026-03-15T23:47:56.918Z"
+    "timestamp": "2026-03-16T00:40:55.059Z"
+  },
+  {
+    "id": "bike-ride-3",
+    "title": "Wed, Mar 18 · 12:00 PM – 12:00 AM",
+    "body": "Good. San Francisco offers a mild 20°C with clear skies and minimal cloud cover, perfect for a comfortable bike ride. Light 11 km/h winds provide a gentle breeze without hindering your pace, while excellent visibility ensures a safe, scenic route. UV levels are high—sunscreen recommended.",
+    "activity": "Bike Ride",
+    "score": 71,
+    "temperature": 20,
+    "wind": 11,
+    "condition": "Clear sky",
+    "conditionCode": 0,
+    "startTime": "2026-03-18T15:00:00.000Z",
+    "endTime": "2026-03-19T03:00:00.000Z",
+    "city": "San Francisco",
+    "timestamp": "2026-03-16T00:40:57.430Z"
+  },
+  {
+    "id": "bike-ride-4",
+    "title": "Thu, Mar 19 · 12:00 PM – 12:00 AM",
+    "body": "Good. San Francisco offers a clear sky and mild 20°C temps, perfect for a comfortable bike ride this afternoon. Light 11 km/h winds provide a gentle breeze without hindering your pace, while zero cloud cover ensures excellent visibility. UV Index of 7 calls for sunscreen during longer rides.",
+    "activity": "Bike Ride",
+    "score": 71,
+    "temperature": 20,
+    "wind": 11,
+    "condition": "Clear sky",
+    "conditionCode": 0,
+    "startTime": "2026-03-19T15:00:00.000Z",
+    "endTime": "2026-03-20T03:00:00.000Z",
+    "city": "San Francisco",
+    "timestamp": "2026-03-16T00:41:00.243Z"
   }
 ]
