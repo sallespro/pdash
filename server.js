@@ -365,20 +365,36 @@ function _buildWindow(hours) {
   };
 }
 
+const ACTIVITY_DURATION_H = 3; // target ride duration in hours
+
+// Pick the best consecutive `windowH`-hour slice from a longer eligible run
+function _findBestSubWindow(run, windowH) {
+  if (run.length <= windowH) return run;
+  let bestScore = -1, bestStart = 0;
+  for (let i = 0; i <= run.length - windowH; i++) {
+    const slice = run.slice(i, i + windowH);
+    const w = _buildWindow(slice);
+    const s = _scoreWindow(w);
+    if (s.composite > bestScore) { bestScore = s.composite; bestStart = i; }
+  }
+  return run.slice(bestStart, bestStart + windowH);
+}
+
 function _findWindows(hours, minHours = 2) {
+  const windowH = ACTIVITY_DURATION_H;
   const windows = [];
   let run = [];
   for (let i = 0; i < hours.length; i++) {
     const h = hours[i];
     const prev = i > 0 ? hours[i - 1] : null;
     if (prev && h.time.getDate() !== prev.time.getDate() && run.length > 0) {
-      if (run.length >= minHours) windows.push(_buildWindow(run));
+      if (run.length >= minHours) windows.push(_buildWindow(_findBestSubWindow(run, windowH)));
       run = [];
     }
     if (_matchesProfile(h, BIKE_PROFILE)) { run.push(h); }
-    else { if (run.length >= minHours) windows.push(_buildWindow(run)); run = []; }
+    else { if (run.length >= minHours) windows.push(_buildWindow(_findBestSubWindow(run, windowH))); run = []; }
   }
-  if (run.length >= minHours) windows.push(_buildWindow(run));
+  if (run.length >= minHours) windows.push(_buildWindow(_findBestSubWindow(run, windowH)));
   return windows;
 }
 
@@ -394,10 +410,8 @@ function _scoreWindow(w) {
   const startHour = w.start.getHours();
   const minDist = Math.min(...[9, 10, 15, 16].map(h => Math.abs(startHour - h)));
   const timeScore = Math.max(0, 1 - minDist / 6);
-  const durationHours = (w.end - w.start) / 3600000;
-  const convenienceScore = Math.min(1, durationHours / 6);
   return {
-    composite: 0.5 * weatherScore + 0.3 * timeScore + 0.2 * convenienceScore,
+    composite: 0.65 * weatherScore + 0.35 * timeScore,
     weather: weatherScore, time: timeScore,
   };
 }
@@ -465,7 +479,11 @@ async function generateActivityPosts(lat, lon) {
     }
   }
 
-  const windows = _findWindows(hours, 2);
+  // Limit to next 3 days (72 hours)
+  const cutoff72h = Date.now() + 3 * 24 * 3600000;
+  const hours72 = hours.filter(h => h.time.getTime() <= cutoff72h);
+
+  const windows = _findWindows(hours72, 2);
   if (windows.length === 0) {
     const empty = [{ id: 'no-windows', title: 'No ideal windows found',
       body: `Weather conditions over the next 5 days in ${city} don't match ideal Bike Ride requirements. Check back later!`,

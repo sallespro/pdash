@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Bike, Sun, Cloud, CloudRain, Thermometer, Wind, ChevronUp, ChevronDown } from 'lucide-react';
 
-interface ActivityPost {
+export interface ActivityPost {
   id: string;
   title: string;
   body: string;
@@ -15,6 +15,15 @@ interface ActivityPost {
   endTime: string;
   city: string;
   timestamp: string;
+}
+
+function formatWindowTitle(startISO: string, endISO: string): string {
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const dayLabel = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeLabel = start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const endLabel = end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return `${dayLabel} · ${timeLabel} – ${endLabel}`;
 }
 
 function conditionIcon(code: number, className = 'size-3.5') {
@@ -37,28 +46,15 @@ function scoreBg(score: number): string {
 }
 
 interface ActivityPostsTickerProps {
-  location: { lat: number; lng: number; name?: string; address?: string } | null;
+  posts: ActivityPost[];
+  generating: boolean;
+  activeIndex: number;
+  onNavigate: (index: number) => void;
 }
 
-export function ActivityPostsTicker({ location }: ActivityPostsTickerProps) {
-  const [posts, setPosts] = useState<ActivityPost[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+export function ActivityPostsTicker({ posts, generating, activeIndex, onNavigate }: ActivityPostsTickerProps) {
   const [transitioning, setTransitioning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (!location) return;
-    setGenerating(true);
-    setActiveIndex(0);
-    fetch(`/api/activity-posts?lat=${location.lat}&lon=${location.lng}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) setPosts(data);
-      })
-      .catch(() => {})
-      .finally(() => setGenerating(false));
-  }, [location?.lat, location?.lng]);
 
   // Auto-rotate every 6 seconds
   useEffect(() => {
@@ -67,17 +63,16 @@ export function ActivityPostsTicker({ location }: ActivityPostsTickerProps) {
       advance(1);
     }, 6000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [posts.length, activeIndex]);
+  }, [posts.length, activeIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advance = (dir: 1 | -1) => {
     if (transitioning || posts.length === 0) return;
     setTransitioning(true);
+    if (intervalRef.current) clearInterval(intervalRef.current);
     setTimeout(() => {
-      setActiveIndex(prev => (prev + dir + posts.length) % posts.length);
+      onNavigate((activeIndex + dir + posts.length) % posts.length);
       setTransitioning(false);
     }, 200);
-    // Reset auto-rotate timer
-    if (intervalRef.current) clearInterval(intervalRef.current);
   };
 
   if (posts.length === 0) {
@@ -92,14 +87,14 @@ export function ActivityPostsTicker({ location }: ActivityPostsTickerProps) {
           </>
         ) : (
           <p className="text-slate-500 text-xs" style={{ fontFamily: "'ABC Favorit Mono', monospace" }}>
-            {location ? 'No posts yet' : 'Set location in Settings'}
+            No ride windows found
           </p>
         )}
       </div>
     );
   }
 
-  const post = posts[activeIndex];
+  const post = posts[activeIndex] ?? posts[0];
 
   return (
     <div
@@ -120,8 +115,10 @@ export function ActivityPostsTicker({ location }: ActivityPostsTickerProps) {
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${scoreBg(post.score)} ${scoreColor(post.score)}`}
-            style={{ fontFamily: "'ABC Favorit Mono', monospace" }}>
+          <span
+            className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${scoreBg(post.score)} ${scoreColor(post.score)}`}
+            style={{ fontFamily: "'ABC Favorit Mono', monospace" }}
+          >
             {post.score}
           </span>
           <div className="flex flex-col">
@@ -145,12 +142,12 @@ export function ActivityPostsTicker({ location }: ActivityPostsTickerProps) {
 
       {/* Post content */}
       <div className={`px-3 pb-3 transition-opacity duration-200 ${transitioning ? 'opacity-0' : 'opacity-100'}`}>
-        {/* Title */}
+        {/* Title — formatted client-side using browser timezone */}
         <h3
           className="text-white text-sm leading-tight mb-1.5"
           style={{ fontFamily: "'ABC Favorit Extended', sans-serif" }}
         >
-          {post.title}
+          {formatWindowTitle(post.startTime, post.endTime)}
         </h3>
 
         {/* Quick stats row */}
@@ -185,7 +182,7 @@ export function ActivityPostsTicker({ location }: ActivityPostsTickerProps) {
             key={i}
             onClick={() => {
               if (intervalRef.current) clearInterval(intervalRef.current);
-              setActiveIndex(i);
+              onNavigate(i);
             }}
             className={`rounded-full transition-all duration-300 ${
               i === activeIndex
