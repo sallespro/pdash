@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sun, Cloud, CloudRain, Wind, Droplets, Thermometer, MapPin, RefreshCw, Navigation } from 'lucide-react';
+import { Sun, Cloud, CloudRain, CloudDrizzle, CloudSnow, CloudLightning, CloudFog, CloudSun, Wind, Droplets, Thermometer, MapPin, RefreshCw, Navigation } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { ActivityPostsTicker } from './ActivityPostsTicker';
@@ -25,9 +25,15 @@ interface DashboardProps {
 
 function weatherIcon(code: number, className = 'size-5') {
   if (code === 0) return <Sun className={className + ' text-amber-500'} />;
-  if (code <= 3) return <Cloud className={className + ' text-gray-500'} />;
-  if (code <= 69) return <CloudRain className={className + ' text-blue-500'} />;
-  return <Cloud className={className + ' text-gray-400'} />;
+  if (code <= 2) return <CloudSun className={className + ' text-amber-400'} />;
+  if (code === 3) return <Cloud className={className + ' text-gray-500'} />;
+  if (code <= 48) return <CloudFog className={className + ' text-gray-400'} />;
+  if (code <= 57) return <CloudDrizzle className={className + ' text-blue-400'} />;
+  if (code <= 67) return <CloudRain className={className + ' text-blue-500'} />;
+  if (code <= 77) return <CloudSnow className={className + ' text-sky-300'} />;
+  if (code <= 82) return <CloudRain className={className + ' text-blue-500'} />;
+  if (code <= 86) return <CloudSnow className={className + ' text-sky-300'} />;
+  return <CloudLightning className={className + ' text-yellow-500'} />;
 }
 
 export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }: DashboardProps) {

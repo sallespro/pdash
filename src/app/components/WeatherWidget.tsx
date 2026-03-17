@@ -1,4 +1,4 @@
-import { Cloud, CloudRain, Sun, Wind } from "lucide-react";
+import { Cloud, CloudRain, CloudDrizzle, CloudSnow, CloudLightning, CloudFog, CloudSun, Sun, Wind } from "lucide-react";
 import { Card } from "./ui/card";
 
 interface WeatherData {
@@ -32,16 +32,16 @@ export function WeatherWidget() {
   };
 
   const getWeatherIcon = (condition: string) => {
-    switch (condition.toLowerCase()) {
-      case "sunny":
-        return <Sun className="w-5 h-5 text-yellow-500" />;
-      case "rainy":
-        return <CloudRain className="w-5 h-5 text-blue-500" />;
-      case "cloudy":
-        return <Cloud className="w-5 h-5 text-gray-500" />;
-      default:
-        return <Cloud className="w-5 h-5 text-gray-400" />;
-    }
+    const c = condition.toLowerCase();
+    if (c.includes('thunder') || c.includes('lightning') || c.includes('storm')) return <CloudLightning className="w-5 h-5 text-yellow-500" />;
+    if (c.includes('snow') || c.includes('blizzard') || c.includes('sleet')) return <CloudSnow className="w-5 h-5 text-sky-300" />;
+    if (c.includes('drizzle')) return <CloudDrizzle className="w-5 h-5 text-blue-400" />;
+    if (c.includes('rain') || c.includes('shower')) return <CloudRain className="w-5 h-5 text-blue-500" />;
+    if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return <CloudFog className="w-5 h-5 text-gray-400" />;
+    if (c.includes('partly') || c.includes('mostly cloudy') || c.includes('cloud') && c.includes('sun')) return <CloudSun className="w-5 h-5 text-amber-400" />;
+    if (c.includes('sunny') || c.includes('clear')) return <Sun className="w-5 h-5 text-yellow-500" />;
+    if (c.includes('cloud') || c.includes('overcast')) return <Cloud className="w-5 h-5 text-gray-500" />;
+    return <Cloud className="w-5 h-5 text-gray-400" />;
   };
 
   return (
