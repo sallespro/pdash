@@ -1,5 +1,6 @@
 .gm-stop-verified
 .code-search/
+.claude/worktrees/
 
 # Dependencies
 node_modules/
