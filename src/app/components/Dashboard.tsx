@@ -3,8 +3,18 @@ import { Sun, Cloud, CloudRain, Wind, Droplets, Thermometer, MapPin, RefreshCw, 
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { ActivityPostsTicker } from './ActivityPostsTicker';
+import { ActivityCalendar } from './ActivityCalendar';
+import type { ActivityPost } from './ActivityPostsTicker';
 import type { HourlyWeather, Location, ScheduledPlan, Activity } from '../types';
 import { fetchForecast, weatherCodeToLabel } from '../services/weather';
+
+// Default location shown before geolocation is available
+const FLORIAN: Location = {
+  lat: -27.5954,
+  lng: -48.548,
+  name: 'Florianópolis',
+  address: 'Florianópolis, SC, Brazil',
+};
 
 interface DashboardProps {
   location: Location | null;
@@ -24,11 +34,18 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
   const [forecast, setForecast] = useState<HourlyWeather[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Activity posts — fetched here, shared between ticker and calendar
+  const [activityPosts, setActivityPosts] = useState<ActivityPost[]>([]);
+  const [activePostIndex, setActivePostIndex] = useState(0);
+  const [generatingPosts, setGeneratingPosts] = useState(false);
+
+  // Use detected location if available, otherwise fall back to Florianópolis
+  const effectiveLocation = location ?? FLORIAN;
+
   const loadForecast = async () => {
-    if (!location) return;
     setLoading(true);
     try {
-      const data = await fetchForecast(location);
+      const data = await fetchForecast(effectiveLocation);
       setForecast(data);
     } catch {
       // silent
@@ -38,26 +55,33 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
 
   useEffect(() => {
     loadForecast();
-  }, [location?.lat, location?.lng]);
+  }, [effectiveLocation.lat, effectiveLocation.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch activity posts whenever location changes
+  useEffect(() => {
+    setGeneratingPosts(true);
+    setActivePostIndex(0);
+    fetch(`/api/activity-posts?lat=${effectiveLocation.lat}&lon=${effectiveLocation.lng}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data) && data.length > 0) setActivityPosts(data); })
+      .catch(() => {})
+      .finally(() => setGeneratingPosts(false));
+  }, [effectiveLocation.lat, effectiveLocation.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const now = new Date();
-  // Find the entry closest in time to now (OWM slots can start hours ahead of current time)
   const currentHour = forecast.length > 0
     ? forecast.reduce((a, b) =>
         Math.abs(a.time.getTime() - now.getTime()) <= Math.abs(b.time.getTime() - now.getTime()) ? a : b
       )
     : undefined;
 
-  // Next 12 hours
   const next12 = forecast.filter(h => {
     const diff = h.time.getTime() - now.getTime();
     return diff >= 0 && diff < 12 * 3600000;
   });
 
-  // 3-day summary
   const dailySummary = getDailySummary(forecast);
 
-  // Upcoming confirmed plans (next 48h)
   const upcomingPlans = confirmedPlans.filter(p => {
     const firstTask = p.scheduled_tasks[0];
     if (!firstTask) return false;
@@ -75,12 +99,12 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-sm text-white/90">Weather</CardTitle>
-                {location && (
-                  <p className="text-white/70 text-[10px] mt-0.5 flex items-center gap-1">
-                    <MapPin className="size-2.5" />
-                    {location.name || location.address.split(',')[0]}
-                  </p>
-                )}
+                <p className="text-white/70 text-[10px] mt-0.5 flex items-center gap-1">
+                  <MapPin className="size-2.5" />
+                  {location
+                    ? (location.name || location.address.split(',')[0])
+                    : 'Florianópolis'}
+                </p>
               </div>
               <Button
                 size="icon"
@@ -116,16 +140,26 @@ export function Dashboard({ location, confirmedPlans, activities, onSelectPlan }
                 </div>
               </div>
             ) : (
-              <p className="text-white/60 text-xs">
-                {location ? 'Loading...' : 'Set location in Settings'}
-              </p>
+              <p className="text-white/60 text-xs">Loading...</p>
             )}
           </CardContent>
         </Card>
 
         {/* Activity Posts Ticker */}
-        <ActivityPostsTicker location={location} />
+        <ActivityPostsTicker
+          posts={activityPosts}
+          generating={generatingPosts}
+          activeIndex={activePostIndex}
+          onNavigate={setActivePostIndex}
+        />
       </div>
+
+      {/* Activity Calendar — connected to ticker via shared activePostIndex */}
+      <ActivityCalendar
+        posts={activityPosts}
+        activeIndex={activePostIndex}
+        onSelect={setActivePostIndex}
+      />
 
       {/* Hourly forecast */}
       {next12.length > 0 && (

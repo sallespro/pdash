@@ -57,9 +57,9 @@ async function detectLocation() {
     }
   } catch { /* ignore */ }
 
-  // Final fallback
-  console.warn('Could not detect location, using San Francisco. Pass --lat / --lon to override.');
-  return { lat: 37.7749, lon: -122.4194, source: 'fallback' };
+  // Final fallback — Florianópolis, SC, Brazil
+  console.warn('Could not detect location, using Florianópolis. Pass --lat / --lon to override.');
+  return { lat: -27.5954, lon: -48.548, source: 'fallback' };
 }
 
 const { lat: LAT, lon: LON } = await detectLocation();
